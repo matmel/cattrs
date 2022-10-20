@@ -9,6 +9,7 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    List,
     Mapping,
     Optional,
     Tuple,
@@ -24,6 +25,7 @@ from cattrs.errors import (
     ForbiddenExtraKeysError,
     IterableValidationError,
     StructureHandlerNotFoundError,
+    UnknownSubclassError,
 )
 
 from ._compat import (
@@ -45,6 +47,12 @@ class AttributeOverride:
     omit_if_default: Optional[bool] = None
     rename: Optional[str] = None
     omit: bool = False  # Omit the field completely.
+
+
+def _make_class_tree(cl: Type) -> List[Type]:
+    return [cl] + [
+        sscl for scl in cl.__subclasses__() for sscl in _make_class_tree(scl)
+    ]
 
 
 def override(
@@ -91,6 +99,7 @@ def make_dict_unstructure_fn(
     cl_name = cl.__name__
     fn_name = "unstructure_" + cl_name
     globs = {}
+    subclass_lines = []
     lines = []
     invocation_lines = []
     internal_arg_parts = {}
@@ -106,6 +115,48 @@ def make_dict_unstructure_fn(
         raise RecursionError()
     else:
         working_set.add(cl)
+
+    if converter.include_subclasses:
+        # Make a check of the instance class and if it is a subclass delegate the work
+        # to the unstructuing function of the subclass.
+        # We use the subclasses known at the creation time of the converter by listing
+        # them all and raise an error at unstructuring time if the given instance do not
+        # belong to the list. Hopefully that will be enough to point cattr users of the
+        # risks involved by unstructuring subclass automatically.
+        subclasses = _make_class_tree(cl)[1:]
+        internal_arg_parts["__c_usce"] = UnknownSubclassError
+        cl_ref = f"__c_class_{cl_name}"
+        internal_arg_parts[cl_ref] = cl
+        subclass_lines += [
+            "  instance_cl = instance.__class__",
+            f"  if instance_cl != {cl_ref}:",
+        ]
+        for i, scl in enumerate(subclasses):
+            scl_name = scl.__name__
+            scl_ref = f"__c_class_{scl_name}"
+            try:
+                handler = converter._unstructure_func.dispatch(scl)
+            except RecursionError:
+                # There's a circular reference somewhere down the line
+                handler = converter.unstructure
+            unstruct_handler_name = f"__c_unstr_{scl_name}"
+            globs[unstruct_handler_name] = handler
+            internal_arg_parts[unstruct_handler_name] = handler
+            internal_arg_parts[scl_ref] = scl
+            if_kw = "if" if i == 0 else "elif"
+            subclass_lines += [
+                f"    {if_kw} instance_cl == {scl_ref}:",
+                f"      return {unstruct_handler_name}(instance)",
+            ]
+        err_msg = (
+            f"Subclass {{instance_cl}} of {{{cl_ref}}} is unknown. Make sure that this "
+            "subclass already exists when the converter creates the unstructuring "
+            "functions of the parent class(es)"
+        )
+        if subclasses:
+            subclass_lines += ["    else:", f"      raise __c_usce(f'{err_msg}')"]
+        else:
+            subclass_lines += [f"    raise __c_usce(f'{err_msg}')"]
 
     try:
         for a in attrs:
@@ -183,6 +234,7 @@ def make_dict_unstructure_fn(
 
         total_lines = (
             [f"def {fn_name}(instance{internal_arg_line}):"]
+            + subclass_lines
             + ["  res = {"]
             + [f"    {line}" for line in invocation_lines]
             + ["  }"]

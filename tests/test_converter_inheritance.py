@@ -6,6 +6,7 @@ import attr
 import pytest
 
 from cattrs import BaseConverter, Converter
+from cattrs.errors import UnknownSubclassError
 from cattrs.gen import _make_class_tree
 
 
@@ -90,7 +91,7 @@ def test_structuring_with_inheritance(converter: BaseConverter, struct_unstruct)
     if structured.__class__ in {Child1, Child2, GrandChild}:
         assert converter.structure(unstructured, Parent) == structured
 
-    if structured.__class__.__name__ == GrandChild:
+    if structured.__class__ == GrandChild:
         assert converter.structure(unstructured, Child1) == structured
 
     if structured.__class__ in {Parent, Child1, Child2}:
@@ -103,10 +104,48 @@ def test_structuring_with_inheritance(converter: BaseConverter, struct_unstruct)
 def test_unstructuring_with_inheritance(converter: BaseConverter, struct_unstruct):
     structured, unstructured = struct_unstruct
     converter._unstructure_func.clear_cache()
+
+    f = converter._unstructure_func.dispatch(Parent)
+    for l in inspect.getsourcelines(f)[0]:
+        print(l)
+
     if isinstance(converter, Converter) and not converter.include_subclasses:
         if isinstance(structured, (ContainerParent, ComposeParent)):
             pytest.xfail("Cannot succeed if include_subclasses is set to False")
+
     assert converter.unstructure(structured) == unstructured
+
+    if structured.__class__ in {Child1, Child2, GrandChild}:
+        if isinstance(converter, Converter) and not converter.include_subclasses:
+            pytest.xfail("Cannot succeed if include_subclasses is set to False")
+        assert converter.unstructure(structured, unstructure_as=Parent) == unstructured
+
+
+def test_unstructuring_unknown_subclass():
+    @attr.define
+    class A:
+        a: int
+
+    @attr.define
+    class A1(A):
+        a1: int
+
+    c = Converter(include_subclasses=True)
+    assert c.unstructure(A1(1, 2), unstructure_as=A) == {"a": 1, "a1": 2}
+
+    @attr.define
+    class A2(A1):
+        a2: int
+
+    f = c._unstructure_func.dispatch(A)
+    for l in inspect.getsourcelines(f)[0]:
+        print(l)
+
+    with pytest.raises(UnknownSubclassError, match="Subclass.*A2.*of.*A1.* is unknown"):
+        c.unstructure(A2(1, 2, 3), unstructure_as=A1)
+
+    with pytest.raises(UnknownSubclassError, match="Subclass.*A2.*of.*A.* is unknown"):
+        c.unstructure(A2(1, 2, 3), unstructure_as=A)
 
 
 def test_class_tree_generator():

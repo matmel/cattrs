@@ -55,3 +55,7 @@ class ForbiddenExtraKeysError(Exception):
         )
 
         super().__init__(msg)
+
+class UnknownSubclassError(Exception):
+    """Raised when unstructuring a subclass of a known type"""
+    pass
