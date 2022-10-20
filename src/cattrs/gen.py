@@ -37,7 +37,7 @@ from ._compat import (
 from ._generics import deep_copy_with
 
 if TYPE_CHECKING:  # pragma: no cover
-    from cattr.converters import BaseConverter
+    from cattr.converters import Converter
 
 
 @frozen
@@ -62,7 +62,7 @@ T = TypeVar("T")
 
 def make_dict_unstructure_fn(
     cl: Type[T],
-    converter: "BaseConverter",
+    converter: "Converter",
     _cattrs_omit_if_default: bool = False,
     _cattrs_use_linecache: bool = True,
     **kwargs: AttributeOverride,
@@ -234,7 +234,7 @@ DictStructureFn = Callable[[Mapping[str, Any], Any], T]
 
 def make_dict_structure_fn(
     cl: Type[T],
-    converter: "BaseConverter",
+    converter: "Converter",
     _cattrs_forbid_extra_keys: bool = False,
     _cattrs_use_linecache: bool = True,
     _cattrs_prefer_attrib_converters: bool = False,
@@ -522,7 +522,7 @@ IterableUnstructureFn = Callable[[Iterable[Any]], Any]
 
 
 def make_iterable_unstructure_fn(
-    cl: Any, converter: "BaseConverter", unstructure_to: Any = None
+    cl: Any, converter: "Converter", unstructure_to: Any = None
 ) -> IterableUnstructureFn:
     """Generate a specialized unstructure function for an iterable."""
     handler = converter.unstructure
@@ -558,7 +558,7 @@ HeteroTupleUnstructureFn = Callable[[Tuple[Any, ...]], Any]
 
 
 def make_hetero_tuple_unstructure_fn(
-    cl: Any, converter: "BaseConverter", unstructure_to: Any = None
+    cl: Any, converter: "Converter", unstructure_to: Any = None
 ) -> HeteroTupleUnstructureFn:
     """Generate a specialized unstructure function for a heterogenous tuple."""
     fn_name = "unstructure_tuple"
@@ -605,7 +605,7 @@ MappingUnstructureFn = Callable[[Mapping[Any, Any]], Any]
 
 def make_mapping_unstructure_fn(
     cl: Any,
-    converter: "BaseConverter",
+    converter: "Converter",
     unstructure_to: Any = None,
     key_handler: Optional[Callable[[Any, Optional[Any]], Any]] = None,
 ) -> MappingUnstructureFn:
@@ -662,7 +662,7 @@ MappingStructureFn = Callable[[Mapping[Any, Any], Any], T]
 
 def make_mapping_structure_fn(
     cl: Type[T],
-    converter: "BaseConverter",
+    converter: "Converter",
     structure_to: Type = dict,
     key_type=NOTHING,
     val_type=NOTHING,
