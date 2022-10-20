@@ -1,23 +1,138 @@
 import collections
 import typing
+import inspect
 
 import attr
 import pytest
 
-from cattrs import BaseConverter
+from cattrs import BaseConverter, Converter
+from cattrs.gen import _make_class_tree
 
 
-def test_inheritance(converter):
-    @attr.define
-    class A:
-        i: int
+@attr.define
+class Parent:
+    p: int
 
-    @attr.define
-    class B(A):
-        j: int
 
-    assert A(1) == converter.structure(dict(i=1), A)
-    assert B(1, 2) == converter.structure(dict(i=1, j=2), B)
+@attr.define
+class Child1(Parent):
+    c1: int
+
+
+@attr.define
+class GrandChild(Child1):
+    g: int
+
+
+@attr.define
+class Child2(Parent):
+    c2: int
+
+
+@attr.define
+class ComposeUnion:
+    a: typing.Union[Parent, Child1, Child2, GrandChild]
+
+
+@attr.define
+class ComposeParent:
+    a: Parent
+
+
+@attr.define
+class ContainerUnion:
+    a: typing.List[typing.Union[Parent, Child1, Child2, GrandChild]]
+
+
+@attr.define
+class ContainerParent:
+    a: typing.List[Parent]
+
+
+IDS_TO_STRUCT_UNSTRUCT = {
+    "parent-only": (Parent(1), dict(p=1)),
+    "child1-only": (Child1(1, 2), dict(p=1, c1=2)),
+    "grandchild-only": (GrandChild(1, 2, 3), dict(p=1, c1=2, g=3)),
+    "union-compose-parent": (ComposeUnion(Parent(1)), dict(a=dict(p=1))),
+    "union-compose-child": (ComposeUnion(Child1(1, 2)), dict(a=dict(p=1, c1=2))),
+    "union-compose-grandchild": (
+        ComposeUnion(GrandChild(1, 2, 3)),
+        dict(a=(dict(p=1, c1=2, g=3))),
+    ),
+    "non-union-compose-parent": (ComposeParent(Parent(1)), dict(a=dict(p=1))),
+    "non-union-compose-child": (ComposeParent(Child1(1, 2)), dict(a=dict(p=1, c1=2))),
+    "non-union-compose-grandchild": (
+        ComposeParent(GrandChild(1, 2, 3)),
+        dict(a=(dict(p=1, c1=2, g=3))),
+    ),
+    "container-union": (
+        ContainerUnion([Parent(1), GrandChild(1, 2, 3)]),
+        dict(a=[dict(p=1), dict(p=1, c1=2, g=3)]),
+    ),
+    "container-parent": (
+        ContainerParent([Parent(1), GrandChild(1, 2, 3)]),
+        dict(a=[dict(p=1), dict(p=1, c1=2, g=3)]),
+    ),
+    "container-parent-inverted": (
+        ContainerParent([GrandChild(1, 2, 3), Parent(1)]),
+        dict(a=[dict(p=1, c1=2, g=3), dict(p=1)]),
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "struct_unstruct", IDS_TO_STRUCT_UNSTRUCT.values(), ids=IDS_TO_STRUCT_UNSTRUCT
+)
+def test_structuring_with_inheritance(converter: BaseConverter, struct_unstruct):
+    structured, unstructured = struct_unstruct
+    assert converter.structure(unstructured, structured.__class__) == structured
+
+    if structured.__class__ in {Child1, Child2, GrandChild}:
+        assert converter.structure(unstructured, Parent) == structured
+
+    if structured.__class__.__name__ == GrandChild:
+        assert converter.structure(unstructured, Child1) == structured
+
+    if structured.__class__ in {Parent, Child1, Child2}:
+        assert converter.structure(unstructured, GrandChild) == structured
+
+
+@pytest.mark.parametrize(
+    "struct_unstruct", IDS_TO_STRUCT_UNSTRUCT.values(), ids=IDS_TO_STRUCT_UNSTRUCT
+)
+def test_unstructuring_with_inheritance(converter: BaseConverter, struct_unstruct):
+    structured, unstructured = struct_unstruct
+    converter._unstructure_func.clear_cache()
+    if isinstance(converter, Converter) and not converter.include_subclasses:
+        if isinstance(structured, (ContainerParent, ComposeParent)):
+            pytest.xfail("Cannot succeed if include_subclasses is set to False")
+    assert converter.unstructure(structured) == unstructured
+
+
+def test_class_tree_generator():
+    class P:
+        pass
+
+    class C1(P):
+        pass
+
+    class C2(P):
+        pass
+
+    class GC1(C2):
+        pass
+
+    class GC2(C2):
+        pass
+
+    tree_c1 = _make_class_tree(C1)
+    assert tree_c1 == [C1]
+
+    tree_c2 = _make_class_tree(C2)
+    assert tree_c2 == [C2, GC1, GC2]
+
+    tree_p = _make_class_tree(P)
+    assert tree_p == [P, C1, C2, GC1, GC2]
 
 
 def test_gen_hook_priority(converter: BaseConverter):

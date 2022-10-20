@@ -13,7 +13,10 @@ def genconverter(request):
 
 @pytest.fixture(params=(True, False))
 def converter(request, converter_cls):
-    return converter_cls(detailed_validation=request.param)
+    args = dict(detailed_validation=request.param)
+    if converter_cls is Converter:
+        args["include_subclasses"] = request.param
+    return converter_cls(**args)
 
 
 @pytest.fixture(params=(BaseConverter, Converter), scope="session")
