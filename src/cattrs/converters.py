@@ -716,6 +716,7 @@ class Converter(BaseConverter):
         "omit_if_default",
         "forbid_extra_keys",
         "type_overrides",
+        "include_subclasses",
         "_unstruct_collection_overrides",
         "_struct_copy_skip",
         "_unstruct_copy_skip",
@@ -731,6 +732,7 @@ class Converter(BaseConverter):
         unstruct_collection_overrides: Mapping[Type, Callable] = {},
         prefer_attrib_converters: bool = False,
         detailed_validation: bool = True,
+        include_subclasses: bool = False,
     ):
         super().__init__(
             dict_factory=dict_factory,
@@ -741,6 +743,7 @@ class Converter(BaseConverter):
         self.omit_if_default = omit_if_default
         self.forbid_extra_keys = forbid_extra_keys
         self.type_overrides = dict(type_overrides)
+        self.include_subclasses = include_subclasses
 
         unstruct_collection_overrides = {
             get_origin(k) or k: v for k, v in unstruct_collection_overrides.items()
