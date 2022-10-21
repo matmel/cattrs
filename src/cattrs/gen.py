@@ -15,6 +15,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
 )
 
 import attr
@@ -39,7 +40,7 @@ from ._compat import (
 from ._generics import deep_copy_with
 
 if TYPE_CHECKING:  # pragma: no cover
-    from cattr.converters import Converter
+    from cattr.converters import BaseConverter
 
 
 @frozen
@@ -70,7 +71,7 @@ T = TypeVar("T")
 
 def make_dict_unstructure_fn(
     cl: Type[T],
-    converter: "Converter",
+    converter: "BaseConverter",
     _cattrs_omit_if_default: bool = False,
     _cattrs_use_linecache: bool = True,
     **kwargs: AttributeOverride,
@@ -116,7 +117,7 @@ def make_dict_unstructure_fn(
     else:
         working_set.add(cl)
 
-    if converter.include_subclasses:
+    if getattr(converter, "include_subclasses", False):
         # Make a check of the instance class and if it is a subclass delegate the work
         # to the unstructuing function of the subclass.
         # We use the subclasses known at the creation time of the converter by listing
@@ -286,7 +287,7 @@ DictStructureFn = Callable[[Mapping[str, Any], Any], T]
 
 def make_dict_structure_fn(
     cl: Type[T],
-    converter: "Converter",
+    converter: "BaseConverter",
     _cattrs_forbid_extra_keys: bool = False,
     _cattrs_use_linecache: bool = True,
     _cattrs_prefer_attrib_converters: bool = False,
@@ -343,6 +344,23 @@ def make_dict_structure_fn(
     if _cattrs_forbid_extra_keys:
         globs["__c_a"] = allowed_fields
         globs["__c_feke"] = ForbiddenExtraKeysError
+
+    if getattr(converter, "include_subclasses", False):
+        cl_tree = tuple(_make_class_tree(cl))
+        lines += [
+            "  if '__cattrs_already_recursed_subclasses__' in o:",
+            "    del o['__cattrs_already_recursed_subclasses__']",
+        ]
+        if len(cl_tree) >= 2:
+            union_type = Union[cl_tree]
+            handler = converter._structure_func.dispatch(union_type)
+            internal_arg_parts["__c_subcl_union"] = handler
+            internal_arg_parts["__c_subcl_union_t"] = union_type
+            lines += [
+                "  else:",
+                f"    o['__cattrs_already_recursed_subclasses__'] = '{cl_name}'",
+                "    return __c_subcl_union(o, __c_subcl_union_t)",
+            ]
 
     if _cattrs_detailed_validation:
         lines.append("  res = {}")
@@ -574,7 +592,7 @@ IterableUnstructureFn = Callable[[Iterable[Any]], Any]
 
 
 def make_iterable_unstructure_fn(
-    cl: Any, converter: "Converter", unstructure_to: Any = None
+    cl: Any, converter: "BaseConverter", unstructure_to: Any = None
 ) -> IterableUnstructureFn:
     """Generate a specialized unstructure function for an iterable."""
     handler = converter.unstructure
@@ -610,7 +628,7 @@ HeteroTupleUnstructureFn = Callable[[Tuple[Any, ...]], Any]
 
 
 def make_hetero_tuple_unstructure_fn(
-    cl: Any, converter: "Converter", unstructure_to: Any = None
+    cl: Any, converter: "BaseConverter", unstructure_to: Any = None
 ) -> HeteroTupleUnstructureFn:
     """Generate a specialized unstructure function for a heterogenous tuple."""
     fn_name = "unstructure_tuple"
@@ -657,7 +675,7 @@ MappingUnstructureFn = Callable[[Mapping[Any, Any]], Any]
 
 def make_mapping_unstructure_fn(
     cl: Any,
-    converter: "Converter",
+    converter: "BaseConverter",
     unstructure_to: Any = None,
     key_handler: Optional[Callable[[Any, Optional[Any]], Any]] = None,
 ) -> MappingUnstructureFn:
@@ -714,7 +732,7 @@ MappingStructureFn = Callable[[Mapping[Any, Any], Any], T]
 
 def make_mapping_structure_fn(
     cl: Type[T],
-    converter: "Converter",
+    converter: "BaseConverter",
     structure_to: Type = dict,
     key_type=NOTHING,
     val_type=NOTHING,
