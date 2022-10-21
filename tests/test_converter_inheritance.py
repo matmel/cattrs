@@ -93,8 +93,8 @@ def _show_source(c: BaseConverter, cl: typing.Type, operation="structure"):
         raise ValueError(f"operation must be structure or unstructure not {operation}")
 
     print(f"--- Source code for {cl} dispatch ---")
-    for l in inspect.getsourcelines(f)[0]:
-        print(l)
+    for line in inspect.getsourcelines(f)[0]:
+        print(line)
 
 
 @pytest.mark.parametrize(
@@ -156,8 +156,8 @@ def test_structure_non_attr_subclass():
 
 def test_structure_as_union():
     converter = Converter(include_subclasses=True)
-    l = [dict(p=1, c1=2)]
-    res = converter.structure(l, typing.List[typing.Union[Parent, Child1]])
+    the_list = [dict(p=1, c1=2)]
+    res = converter.structure(the_list, typing.List[typing.Union[Parent, Child1]])
     _show_source(converter, Parent)
     _show_source(converter, Child1)
     assert res == [Child1(1, 2)]
