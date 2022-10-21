@@ -58,6 +58,6 @@ class ForbiddenExtraKeysError(Exception):
 
 
 class UnknownSubclassError(Exception):
-    """Raised when unstructuring a subclass of a known type"""
+    """Raised when unstructuring a subclass of an unknown type"""
 
     pass
