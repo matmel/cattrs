@@ -423,6 +423,66 @@ attributes holding ``attrs`` classes and dataclasses.
     >>> cattrs.structure({'b': {'a': '1'}}, B)
     B(b=A(a=1))
 
+
+Structuring support for ``attrs`` subclasses
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, when structuring a dictionary to an ``attrs`` class , only the exact type in
+question is considered. Sometimes it may be interesting to also consider subtypes.
+Conceptually, this is equivalent to replace the considered class with the ``Union`` of
+the class and all its subclasses. At the moment, the automatic support for the
+subclasses in ``cattrs`` is limited by the `Automatic Disambiguation` of union type
+support and as such limited to ``attrs`` classes. This subclass support is opt-in via
+the ``include_subclasses=True`` parameter that only exists in
+:py:class:`cattrs.Converter` and not in :py:class:`cattrs.BaseConverter`. Here is a
+usage example:
+
+.. doctest::
+
+    >>> @define
+    ... class Parent:
+    ...     p: int
+    ...
+    >>> @define
+    ... class Child(Parent):
+    ...     c: int
+    ...
+    >>> converter = Converter(include_subclasses=True)
+    >>> converter.structure({"p": 1, "c": 2}, Parent)  # Note: we ask to structure as Parent
+    Child(p=1, c=2)
+
+.. warning::
+    When the converter creates and compiles the structuring function the first time it
+    encounters a new class (in ``converter.structure(...)`` line in the example above),
+    it will use all subclasses already defined at this time and only those. Remember
+    that each time a subclass is created, the parent class knows it through its
+    ``__subclasses__`` method.
+
+    If during the importing sequence of your code, some subclasses are defined *after*
+    the first invocation of ``converter.structure`` that involves the parent class
+    directly or indirectly through attribute typing of other classes, those late class
+    definition will not be included in the equivalent union type of all subclasses.
+
+If you want to have a more limited support subclasses structuring, you can workaround by
+defining the union type yourself. The advantages are that your intention is explicit and
+it works with :py:class:`BaseConverter` or :py:class:`Converter` with
+``include_subclasses=False`` (the default):
+
+.. doctest::
+
+    >>> @define
+    ... class Parent:
+    ...     p: int
+    ...
+    >>> @define
+    ... class Child(Parent):
+    ...     c: int
+    ...
+    >>> converter = Converter()
+    >>> converter.structure({"p": 1, "c": 2}, Union[Parent, Child])  # Use explicit union type
+    Child(p=1, c=2)
+
+
 Registering custom structuring hooks
 ------------------------------------
 
