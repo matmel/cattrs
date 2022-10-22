@@ -50,6 +50,17 @@ class NonUnionContainer:
     a: typing.List[Parent]
 
 
+@attr.define
+class CircularA:
+    a: int
+    other: "typing.List[CircularA]"
+
+
+@attr.define
+class CircularB(CircularA):
+    b: int
+
+
 IDS_TO_STRUCT_UNSTRUCT = {
     "parent-only": (Parent(1), dict(p=1)),
     "child1-only": (Child1(1, 2), dict(p=1, c1=2)),
@@ -161,6 +172,21 @@ def test_structure_as_union():
     _show_source(converter, Parent)
     _show_source(converter, Child1)
     assert res == [Child1(1, 2)]
+
+
+def test_circular_reference():
+    c = Converter(include_subclasses=True)
+    struct = CircularB(a=1, other=[CircularB(a=2, other=[], b=3)], b=4)
+    unstruct = dict(a=1, other=[dict(a=2, other=[], b=3)], b=4)
+
+    res = c.unstructure(struct)
+    assert res == unstruct
+
+    res = c.unstructure(struct, CircularA)
+    assert res == unstruct
+
+    res = c.structure(unstruct, CircularA)
+    assert res == struct
 
 
 @pytest.mark.parametrize(
