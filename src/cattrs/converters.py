@@ -52,7 +52,7 @@ from ._compat import (
     is_tuple,
     is_union_type,
 )
-from .disambiguators import create_uniq_field_dis_func
+from .disambiguators import create_uniq_field_dis_func, create_type_name_field_dis_func
 from .dispatch import MultiStrategyDispatch
 from .gen import (
     AttributeOverride,
@@ -384,10 +384,10 @@ class BaseConverter:
         return fn
 
     def _gen_attrs_union_structure(
-        self, cl: Any
+        self, cl: Any, strategy="unique_fields", **kwargs
     ) -> Callable[[Any, Type[T]], Optional[Type[T]]]:
         """Generate a structuring function for a union of attrs classes (and maybe None)."""
-        dis_fn = self._get_dis_func(cl)
+        dis_fn = self._get_dis_func(cl, strategy, **kwargs)
         has_none = NoneType in cl.__args__
 
         if has_none:
@@ -658,7 +658,7 @@ class BaseConverter:
                 return res
 
     @staticmethod
-    def _get_dis_func(union) -> Callable[..., Type]:
+    def _get_dis_func(union, strategy="unique_fields", **kwargs) -> Callable[..., Type]:
         """Fetch or try creating a disambiguation function for a union."""
         union_types = union.__args__
         if NoneType in union_types:  # type: ignore
@@ -668,13 +668,16 @@ class BaseConverter:
                 e for e in union_types if e is not NoneType  # type: ignore
             )
 
-        if not all(has(get_origin(e) or e) for e in union_types):
-            raise StructureHandlerNotFoundError(
-                "Only unions of attrs classes supported "
-                "currently. Register a loads hook manually.",
-                type_=union,
-            )
-        return create_uniq_field_dis_func(*union_types)
+        if strategy == "unique_fields":
+            if not all(has(get_origin(e) or e) for e in union_types):
+                raise StructureHandlerNotFoundError(
+                    "Only unions of attrs classes supported "
+                    "currently. Register a loads hook manually.",
+                    type_=union,
+                )
+            return create_uniq_field_dis_func(*union_types)
+        elif strategy == "type_key":
+            return create_type_name_field_dis_func(*union_types, **kwargs)
 
     def __deepcopy__(self, _) -> "BaseConverter":
         return self.copy()

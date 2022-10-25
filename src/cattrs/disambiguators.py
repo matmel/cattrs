@@ -2,6 +2,7 @@
 from collections import OrderedDict
 from functools import reduce
 from operator import or_
+from re import L
 from typing import Any, Callable, Dict, Mapping, Optional, Type
 
 from attr import NOTHING, fields
@@ -55,5 +56,36 @@ def create_uniq_field_dis_func(
             if k in data:
                 return v
         return fallback
+
+    return dis_func
+
+
+def create_type_name_field_dis_func(
+    *classes: Type[Any], type_name_key: str = "type"
+) -> Callable[[Mapping[Any, Any]], Optional[Type[Any]]]:
+    """Generate a disambiguation function that reads a key holding the type name
+
+    The name of the key is customizable. Optionally a mapping for the type name can be
+    given. If the type name passed via the type key is not recognized, the first class
+    of the union is returned.
+    """
+    names_to_cl = {c.__name__: c for c in classes}
+    fallback = classes[0]
+
+    def dis_func(data: Mapping[Any, Any]) -> Optional[Type]:
+        if not isinstance(data, Mapping):
+            raise ValueError("Only input mappings are supported")
+
+        if type_name_key not in data:
+            raise ValueError(
+                f"Cannot disambiguate union type if key {type_name_key} is not in the "
+                "mapping"
+            )
+        type_name = data[type_name_key]
+
+        if type_name not in names_to_cl:
+            return fallback
+
+        return names_to_cl[type_name]
 
     return dis_func

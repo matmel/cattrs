@@ -74,6 +74,7 @@ def make_dict_unstructure_fn(
     converter: "BaseConverter",
     _cattrs_omit_if_default: bool = False,
     _cattrs_use_linecache: bool = True,
+    _cattrs_type_name_key: str = "",
     **kwargs: AttributeOverride,
 ) -> Callable[[T], Dict[str, Any]]:
     """
@@ -128,6 +129,8 @@ def make_dict_unstructure_fn(
         internal_arg_parts["__c_usce"] = UnknownSubclassError
         cl_ref = f"__c_class_{cl_name}"
         internal_arg_parts[cl_ref] = cl
+        if _cattrs_type_name_key:
+            invocation_lines.append(f"'{_cattrs_type_name_key}': '{cl_name}',")
         subclass_lines += [
             "  instance_cl = instance.__class__",
             f"  if instance_cl != {cl_ref}:",
@@ -292,6 +295,7 @@ def make_dict_structure_fn(
     _cattrs_use_linecache: bool = True,
     _cattrs_prefer_attrib_converters: bool = False,
     _cattrs_detailed_validation: bool = True,
+    _cattrs_type_name_key: str = "",
     **kwargs: AttributeOverride,
 ) -> DictStructureFn[T]:
     """Generate a specialized dict structuring function for an attrs class."""
@@ -353,6 +357,12 @@ def make_dict_structure_fn(
         ]
         if len(cl_tree) >= 2:
             union_type = Union[cl_tree]
+            converter.register_structure_hook(
+                union_type,
+                converter._gen_attrs_union_structure(
+                    union_type, strategy="type_key", type_name_key=_cattrs_type_name_key
+                ),
+            )
             handler = converter._structure_func.dispatch(union_type)
             internal_arg_parts["__c_subcl_union"] = handler
             internal_arg_parts["__c_subcl_union_t"] = union_type

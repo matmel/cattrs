@@ -7,7 +7,11 @@ import pytest
 
 from cattrs import BaseConverter, Converter
 from cattrs.errors import UnknownSubclassError, ClassValidationError
-from cattrs.gen import _make_class_tree
+from cattrs.gen import (
+    _make_class_tree,
+    make_dict_structure_fn,
+    make_dict_unstructure_fn,
+)
 
 
 @attr.define
@@ -187,6 +191,29 @@ def test_circular_reference():
 
     res = c.structure(unstruct, CircularA)
     assert res == struct
+
+
+def test_subclass_union_disambiguation():
+    converter = Converter(include_subclasses=True)
+
+    def unstructure_with_type_name(cls):
+        return make_dict_unstructure_fn(cls, converter, _cattrs_type_name_key="_type")
+
+    converter.register_unstructure_hook_factory(
+        lambda c: issubclass(c, Parent), unstructure_with_type_name
+    )
+
+    def structure_with_type_name(cls):
+        return make_dict_structure_fn(cls, converter, _cattrs_type_name_key="_type")
+
+    converter.register_structure_hook_factory(
+        lambda c: issubclass(c, Parent), structure_with_type_name
+    )
+
+    nuc = NonUnionCompose(Child1(1, 2))
+    unstructured = {"a": {"_type": "Child1", "p": 1, "c1": 2}}
+    assert converter.unstructure(nuc) == unstructured
+    assert converter.structure(unstructured, NonUnionCompose) == nuc
 
 
 @pytest.mark.parametrize(
