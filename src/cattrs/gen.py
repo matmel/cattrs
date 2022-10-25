@@ -357,12 +357,17 @@ def make_dict_structure_fn(
         ]
         if len(cl_tree) >= 2:
             union_type = Union[cl_tree]
-            converter.register_structure_hook(
-                union_type,
-                converter._gen_attrs_union_structure(
-                    union_type, strategy="type_key", type_name_key=_cattrs_type_name_key
-                ),
-            )
+            if _cattrs_type_name_key:
+                # A type key has been defined which means the user wants the type_key
+                # strategy instead of the unique_field strategy:
+                converter.register_structure_hook(
+                    union_type,
+                    converter._gen_attrs_union_structure(
+                        union_type,
+                        strategy="type_key",
+                        type_name_key=_cattrs_type_name_key,
+                    ),
+                )
             handler = converter._structure_func.dispatch(union_type)
             internal_arg_parts["__c_subcl_union"] = handler
             internal_arg_parts["__c_subcl_union_t"] = union_type

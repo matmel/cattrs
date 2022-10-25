@@ -1,6 +1,7 @@
 import collections
 import typing
 import inspect
+from copy import deepcopy
 
 import attr
 import pytest
@@ -117,6 +118,7 @@ def _show_source(c: BaseConverter, cl: typing.Type, operation="structure"):
 )
 def test_structuring_with_inheritance(converter: BaseConverter, struct_unstruct):
     structured, unstructured = struct_unstruct
+    unstructured = deepcopy(unstructured)
     do_not_support_subclass_structure = (
         converter.__class__ == Converter and not converter.include_subclasses
     ) or converter.__class__ == BaseConverter
@@ -221,6 +223,7 @@ def test_subclass_union_disambiguation():
 )
 def test_unstructuring_with_inheritance(converter: BaseConverter, struct_unstruct):
     structured, unstructured = struct_unstruct
+    unstructured = deepcopy(unstructured)
     converter._unstructure_func.clear_cache()
 
     _show_source(converter, Parent, "unstructure")
